@@ -3,7 +3,7 @@ require('dotenv').config();
 const config = {
 
     host: process.env.DB_HOST,
-    port: 5432,
+    port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME,
     username: process.env.DB_USER,
     password: process.env.DB_PASS,
@@ -24,6 +24,9 @@ const UserModel = require('./database/models/user');
 const ProductModel = require('./database/models/product');
 const OrderModel = require('./database/models/order');
 const OrderProductModel = require('./database/models/order_product');
+
+// load passport configuration middleware
+const { passportLoginRoute, passportJWTStrategy } = require('./middleware/passport-config');
 
 const connectionString = `postgres://${config.username}:${config.password}@${config.host}:${config.port}/${config.database}`
 const sequelize = new Sequelize(process.env.DATABASE_URL || connectionString, {
@@ -61,24 +64,24 @@ app.use(session({
 // Configure the local strategy for use by Passport.
 passport.use(new LocalStrategy((username, password, cb) => {
 
-        Users.findOne({ where: { email: username } }).then((user) => {
+    Users.findOne({ where: { email: username } }).then((user) => {
 
-            if (user.password != password) {
-                return cb(null, false); 
-            }
-            
-            return cb(null, user);
+        if (user.password != password) {
+            return cb(null, false);
+        }
 
-        }).catch((e) => {
+        return cb(null, user);
 
-            return cb(e);
+    }).catch((e) => {
 
-        })
+        return cb(e);
+
+    })
 
 }));
 
 passport.serializeUser((user, cb) => {
-    
+
     cb(null, user.id);
 
 });
@@ -90,7 +93,7 @@ passport.deserializeUser((id, cb) => {
         cb(null, user);
 
     }).catch((e) => {
-        
+
         return cb(err);
 
     })
@@ -102,6 +105,12 @@ app.use(passport.session());
 
 // Login route
 app.post('/login', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/Login' }));
+
+// init passport with passportJWTStrategy
+passportJWTStrategy({ passport, Users });
+// add login route
+passportLoginRoute({ app, Users });
+
 
 // API get all users
 app.get('/api/users/', (req, res) => {
@@ -117,7 +126,7 @@ app.get('/api/users/', (req, res) => {
 });
 
 // API get target user
-app.get('/api/users/:id', (req, res) => {
+app.get('/api/users/:id', passport.authenticate('jwt', { session: false }), (req, res) => {
 
     let id = req.params.id;
 
@@ -127,12 +136,12 @@ app.get('/api/users/:id', (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(results));
         } else {
-            res.status(434).send('User does not exist is DB');
+            res.status(404).send('User does not exist is DB');
         }
 
     }).catch((e) => {
         console.log(e);
-        res.status(434).send('error retrieving info on target User');
+        res.status(500).send('error retrieving info on target User');
     })
 
 });
@@ -175,7 +184,7 @@ app.post('/api/users/register', (req, res) => {
 });
 
 // API update a target user's info
-app.put('/api/users/:id', function (req, res) {
+app.put('/api/users/:id', passport.authenticate('jwt', { session: false }), (req, res) => {
 
     const data = {
 
@@ -256,7 +265,7 @@ app.delete('/api/users/:id', (req, res) => {
 });
 
 // API get all products
-app.get('/api/products/', function (req, res) {
+app.get('/api/products/', (req, res) => {
 
     Products.findAll().then((results) => {
         res.setHeader('Content-Type', 'application/json');
