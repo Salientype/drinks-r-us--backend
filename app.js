@@ -59,15 +59,17 @@ app.use(session({
 }));
 
 // Configure the local strategy for use by Passport.
-passport.use(new LocalStrategy(
-    function (username, password, cb) {
+passport.use(new LocalStrategy((username, password, cb) => {
 
         Users.findOne({ where: { email: username } }).then((user) => {
 
-            if (user.password != password) { return cb(null, false); }
+            if (user.password != password) {
+                return cb(null, false); 
+            }
+            
             return cb(null, user);
 
-        }).catch(function (e) {
+        }).catch((e) => {
 
             return cb(e);
 
@@ -75,19 +77,19 @@ passport.use(new LocalStrategy(
 
 }));
 
-passport.serializeUser(function (user, cb) {
+passport.serializeUser((user, cb) => {
     
     cb(null, user.id);
 
 });
 
-passport.deserializeUser(function (id, cb) {
+passport.deserializeUser((id, cb) => {
 
     Users.findOne({ where: { id: id } }).then((user) => {
 
         cb(null, user);
 
-    }).catch(function (e) {
+    }).catch((e) => {
         
         return cb(err);
 
